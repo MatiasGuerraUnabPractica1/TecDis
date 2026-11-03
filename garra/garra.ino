@@ -70,6 +70,11 @@ void controlarGarra(bool abrir) {
   }
 }
 
+void mostrarAyuda() {
+  Serial.println("Garra lista. Comandos por Monitor Serie:");
+  Serial.println("  a = abrir | c = cerrar | numero (ej. 45) = ir a ese angulo | h = ayuda");
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -77,8 +82,8 @@ void setup() {
   servoGarra.attach(PIN_SERVO_GARRA, PULSO_MIN_US, PULSO_MAX_US);
   servoGarra.write(anguloActual); // Posición inicial: abierta
 
-  Serial.println("Garra lista. Comandos por Monitor Serie:");
-  Serial.println("  a = abrir | c = cerrar | numero (ej. 45) = ir a ese angulo");
+  delay(1000);                    // Da tiempo a que el Monitor Serie se conecte
+  mostrarAyuda();
 }
 
 void loop() {
@@ -97,6 +102,8 @@ void loop() {
       moverGarra(comando.toInt());
       Serial.print("Angulo: ");
       Serial.println(anguloActual);
+    } else {
+      mostrarAyuda();               // "h" o cualquier comando desconocido
     }
   }
 }
