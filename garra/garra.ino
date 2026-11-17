@@ -16,9 +16,9 @@
  *
  * Comandos por Monitor Serie (115200 baudios, "Nueva línea"):
  *   a / c          -> abrir / cerrar garra
- *   garra 45       -> garra a 45 grados
- *   hombro 90      -> hombro a 90 grados
- *   codo 60        -> codo a 60 grados
+ *   h 45           -> hombro a 45 grados   (también: hombro 45)
+ *   c 33           -> codo a 33 grados     (también: codo 33)
+ *   g 50           -> garra a 50 grados    (también: garra 50)
  *   brazo 90 60    -> hombro a 90 y codo a 60 AL MISMO TIEMPO
  *   x              -> soltar todos los servos (dejan de hacer fuerza y de zumbar)
  *   ?              -> ayuda
@@ -169,9 +169,9 @@ void mostrarPosicion() {
 void mostrarAyuda() {
   Serial.println("Brazo listo. Comandos:");
   Serial.println("  a / c        -> abrir / cerrar garra");
-  Serial.println("  garra 45     -> garra a 45 grados");
-  Serial.println("  hombro 90    -> hombro a 90 grados");
-  Serial.println("  codo 60      -> codo a 60 grados");
+  Serial.println("  h 45         -> hombro a 45 grados");
+  Serial.println("  c 33         -> codo a 33 grados");
+  Serial.println("  g 50         -> garra a 50 grados");
   Serial.println("  brazo 90 60  -> hombro y codo juntos");
   Serial.println("  x            -> soltar todos los servos");
   Serial.println("  ?            -> esta ayuda");
@@ -191,16 +191,18 @@ void procesarComando(String comando) {
   int valor1 = resto.toInt();
   int valor2 = (espacio2 == -1) ? 0 : resto.substring(espacio2 + 1).toInt();
 
+  bool hayNumero = resto.length() > 0;
+
   if (palabra == "a") {
     abrirGarra();
-  } else if (palabra == "c") {
-    cerrarGarra();
-  } else if (palabra == "garra" && resto.length() > 0) {
-    moverArticulacion(garra, valor1);
-  } else if (palabra == "hombro" && resto.length() > 0) {
-    moverArticulacion(hombro, valor1);
-  } else if (palabra == "codo" && resto.length() > 0) {
-    moverArticulacion(codo, valor1);
+  } else if (palabra == "c" && !hayNumero) {
+    cerrarGarra();                          // "c" solo = cerrar garra
+  } else if ((palabra == "h" || palabra == "hombro") && hayNumero) {
+    moverArticulacion(hombro, valor1);      // "h 45"
+  } else if ((palabra == "c" || palabra == "codo") && hayNumero) {
+    moverArticulacion(codo, valor1);        // "c 33"
+  } else if ((palabra == "g" || palabra == "garra") && hayNumero) {
+    moverArticulacion(garra, valor1);       // "g 50"
   } else if (palabra == "brazo" && espacio2 != -1) {
     moverBrazo(valor1, valor2);
   } else if (palabra == "x") {
