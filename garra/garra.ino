@@ -5,6 +5,10 @@
  *   Arduino IDE -> Herramientas -> Administrar bibliotecas -> buscar "ESP32Servo"
  *   (la librería "Servo" estándar de Arduino NO funciona en ESP32)
  *
+ * Servos:
+ *   Garra          -> micro servo 9g (SG90/MG90S)
+ *   Hombro y codo  -> Hitec HS-475HB (cables negro/rojo/amarillo)
+ *
  * Conexión de cada servo:
  *   Marrón  -> GND (común con el GND del ESP32)
  *   Rojo    -> 5V  (fuente externa, no el pin 3V3 del ESP32)
@@ -16,6 +20,7 @@
  *   hombro 90      -> hombro a 90 grados
  *   codo 60        -> codo a 60 grados
  *   brazo 90 60    -> hombro a 90 y codo a 60 AL MISMO TIEMPO
+ *   x              -> soltar todos los servos (dejan de hacer fuerza y de zumbar)
  *   ?              -> ayuda
  */
 
@@ -45,9 +50,14 @@ const int CODO_INICIAL   = 90;
 // Velocidad: milisegundos de espera por cada grado (0 = movimiento inmediato)
 const int MS_POR_GRADO = 8;
 
-// Pulsos típicos de servos SG90 / MG90S / MG996R (en microsegundos)
-const int PULSO_MIN_US = 500;
-const int PULSO_MAX_US = 2400;
+// Rango de pulso de cada tipo de servo (en microsegundos).
+// Micro servo 9g: 500-2400 us.
+// Hitec HS-475HB: se usa 900-2100 us (rango seguro recomendado por Hitec).
+// Pedirle más de lo que el servo da físicamente lo hace forzar y ZUMBAR.
+const int PULSO_MIN_9G     = 500;
+const int PULSO_MAX_9G     = 2400;
+const int PULSO_MIN_HS475  = 900;
+const int PULSO_MAX_HS475  = 2100;
 // -----------------------------------------------
 
 // Una articulación = un servo + sus límites + su posición actual
@@ -57,25 +67,42 @@ struct Articulacion {
   int minimo;
   int maximo;
   int actual;
+  int pulsoMin;
+  int pulsoMax;
   Servo servo;
 };
 
 Articulacion garra  = {"Garra",  PIN_GARRA,
                        min(ANGULO_GARRA_ABIERTA, ANGULO_GARRA_CERRADA),
                        max(ANGULO_GARRA_ABIERTA, ANGULO_GARRA_CERRADA),
-                       ANGULO_GARRA_ABIERTA};
-Articulacion hombro = {"Hombro", PIN_HOMBRO, HOMBRO_MIN, HOMBRO_MAX, HOMBRO_INICIAL};
-Articulacion codo   = {"Codo",   PIN_CODO,   CODO_MIN,   CODO_MAX,   CODO_INICIAL};
+                       ANGULO_GARRA_ABIERTA, PULSO_MIN_9G, PULSO_MAX_9G};
+Articulacion hombro = {"Hombro", PIN_HOMBRO, HOMBRO_MIN, HOMBRO_MAX, HOMBRO_INICIAL,
+                       PULSO_MIN_HS475, PULSO_MAX_HS475};
+Articulacion codo   = {"Codo",   PIN_CODO,   CODO_MIN,   CODO_MAX,   CODO_INICIAL,
+                       PULSO_MIN_HS475, PULSO_MAX_HS475};
 
 void iniciarArticulacion(Articulacion &art) {
   art.servo.setPeriodHertz(50);  // Los servos analógicos trabajan a 50 Hz
-  art.servo.attach(art.pin, PULSO_MIN_US, PULSO_MAX_US);
+  art.servo.attach(art.pin, art.pulsoMin, art.pulsoMax);
   art.servo.write(art.actual);   // Ir a la posición inicial
+}
+
+// Deja de mandar señal: el servo se suelta y deja de hacer fuerza (y de zumbar)
+void soltarArticulacion(Articulacion &art) {
+  art.servo.detach();
+}
+
+// Si el servo estaba suelto, lo vuelve a conectar en su posición actual
+void asegurarConectado(Articulacion &art) {
+  if (!art.servo.attached()) {
+    iniciarArticulacion(art);
+  }
 }
 
 // Mueve UNA articulación (garra, hombro o codo) a un ángulo, de forma gradual.
 // El ángulo se recorta a los límites de esa articulación.
 void moverArticulacion(Articulacion &art, int anguloDestino) {
+  asegurarConectado(art);
   anguloDestino = constrain(anguloDestino, art.minimo, art.maximo);
 
   if (MS_POR_GRADO == 0) {
@@ -94,6 +121,8 @@ void moverArticulacion(Articulacion &art, int anguloDestino) {
 // Mueve hombro y codo AL MISMO TIEMPO: ambos empiezan y terminan juntos,
 // aunque uno tenga que recorrer más grados que el otro.
 void moverBrazo(int anguloHombro, int anguloCodo) {
+  asegurarConectado(hombro);
+  asegurarConectado(codo);
   anguloHombro = constrain(anguloHombro, hombro.minimo, hombro.maximo);
   anguloCodo   = constrain(anguloCodo,   codo.minimo,   codo.maximo);
 
@@ -144,6 +173,7 @@ void mostrarAyuda() {
   Serial.println("  hombro 90    -> hombro a 90 grados");
   Serial.println("  codo 60      -> codo a 60 grados");
   Serial.println("  brazo 90 60  -> hombro y codo juntos");
+  Serial.println("  x            -> soltar todos los servos");
   Serial.println("  ?            -> esta ayuda");
   mostrarPosicion();
 }
@@ -173,6 +203,12 @@ void procesarComando(String comando) {
     moverArticulacion(codo, valor1);
   } else if (palabra == "brazo" && espacio2 != -1) {
     moverBrazo(valor1, valor2);
+  } else if (palabra == "x") {
+    soltarArticulacion(hombro);
+    soltarArticulacion(codo);
+    soltarArticulacion(garra);
+    Serial.println("Servos sueltos. Cualquier comando de movimiento los vuelve a activar.");
+    return;
   } else {
     mostrarAyuda();
     return;
