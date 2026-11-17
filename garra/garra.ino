@@ -41,11 +41,11 @@ const int ANGULO_GARRA_CERRADA = 89;
 // llegan sin chocar ni forzar la estructura.
 const int HOMBRO_MIN     = 0;
 const int HOMBRO_MAX     = 180;
-const int HOMBRO_INICIAL = 90;
+const int HOMBRO_INICIAL = 120;  // posición base del hombro
 
 const int CODO_MIN       = 0;
 const int CODO_MAX       = 180;
-const int CODO_INICIAL   = 120;  // posición base del codo (montaje del brazo hecho en 120)
+const int CODO_INICIAL   = 180;  // posición base del codo
 
 // Velocidad: milisegundos de espera por cada grado (0 = movimiento inmediato)
 const int MS_POR_GRADO = 8;
