@@ -45,7 +45,7 @@ const int HOMBRO_INICIAL = 90;
 
 const int CODO_MIN       = 0;
 const int CODO_MAX       = 180;
-const int CODO_INICIAL   = 90;
+const int CODO_INICIAL   = 120;  // posición base del codo (montaje del brazo hecho en 120)
 
 // Velocidad: milisegundos de espera por cada grado (0 = movimiento inmediato)
 const int MS_POR_GRADO = 8;
