@@ -1,11 +1,12 @@
 /*
- * Control de brazo robótico (hombro + codo + garra) con servomotores - ESP32
+ * Control de brazo robótico (base + hombro + codo + garra) con servomotores - ESP32
  *
  * Librería necesaria: "ESP32Servo" (Kevin Harrington / John K. Bennett)
  *   Arduino IDE -> Herramientas -> Administrar bibliotecas -> buscar "ESP32Servo"
  *   (la librería "Servo" estándar de Arduino NO funciona en ESP32)
  *
  * Servos:
+ *   Base           -> servo que gira todo el brazo (ver PULSO_..._BASE)
  *   Garra          -> micro servo 9g (SG90/MG90S)
  *   Hombro y codo  -> Hitec HS-475HB (cables negro/rojo/amarillo)
  *
@@ -15,6 +16,7 @@
  *   Naranja -> pin de señal (ver PIN_... abajo)
  *
  * Comandos por Monitor Serie (115200 baudios, "Nueva línea"):
+ *   b 90           -> base a 90 grados     (también: base 90)
  *   a / c          -> abrir / cerrar garra
  *   h 45           -> hombro a 45 grados   (también: hombro 45)
  *   c 33           -> codo a 33 grados     (también: codo 33)
@@ -31,6 +33,7 @@
 const int PIN_GARRA  = 13;
 const int PIN_HOMBRO = 14;
 const int PIN_CODO   = 27;
+const int PIN_BASE   = 26;
 
 // Ángulos de la garra (calibrados)
 const int ANGULO_GARRA_ABIERTA = 10;
@@ -47,6 +50,11 @@ const int CODO_MIN       = 0;
 const int CODO_MAX       = 180;
 const int CODO_INICIAL   = 180;  // posición base del codo
 
+// Límites de la base (giro de todo el brazo). AJUSTAR igual que el resto.
+const int BASE_MIN       = 0;
+const int BASE_MAX       = 180;
+const int BASE_INICIAL   = 90;   // posición base: centro
+
 // Velocidad: milisegundos de espera por cada grado (0 = movimiento inmediato)
 const int MS_POR_GRADO = 8;
 
@@ -58,6 +66,10 @@ const int PULSO_MIN_9G     = 500;
 const int PULSO_MAX_9G     = 2400;
 const int PULSO_MIN_HS475  = 900;
 const int PULSO_MAX_HS475  = 2100;
+// Servo de la base: por defecto se asume otro HS-475HB.
+// Si es otro modelo, cambia estos dos valores (ej. 500-2400 para un MG996R).
+const int PULSO_MIN_BASE   = PULSO_MIN_HS475;
+const int PULSO_MAX_BASE   = PULSO_MAX_HS475;
 // -----------------------------------------------
 
 // Una articulación = un servo + sus límites + su posición actual
@@ -76,6 +88,8 @@ Articulacion garra  = {"Garra",  PIN_GARRA,
                        min(ANGULO_GARRA_ABIERTA, ANGULO_GARRA_CERRADA),
                        max(ANGULO_GARRA_ABIERTA, ANGULO_GARRA_CERRADA),
                        ANGULO_GARRA_ABIERTA, PULSO_MIN_9G, PULSO_MAX_9G};
+Articulacion base   = {"Base",   PIN_BASE,   BASE_MIN,   BASE_MAX,   BASE_INICIAL,
+                       PULSO_MIN_BASE, PULSO_MAX_BASE};
 Articulacion hombro = {"Hombro", PIN_HOMBRO, HOMBRO_MIN, HOMBRO_MAX, HOMBRO_INICIAL,
                        PULSO_MIN_HS475, PULSO_MAX_HS475};
 Articulacion codo   = {"Codo",   PIN_CODO,   CODO_MIN,   CODO_MAX,   CODO_INICIAL,
@@ -99,7 +113,7 @@ void asegurarConectado(Articulacion &art) {
   }
 }
 
-// Mueve UNA articulación (garra, hombro o codo) a un ángulo, de forma gradual.
+// Mueve UNA articulación (base, garra, hombro o codo) a un ángulo, de forma gradual.
 // El ángulo se recorta a los límites de esa articulación.
 void moverArticulacion(Articulacion &art, int anguloDestino) {
   asegurarConectado(art);
@@ -162,12 +176,13 @@ void controlarGarra(bool abrir) {
 
 // ---------------- Monitor Serie ----------------
 void mostrarPosicion() {
-  Serial.printf("Hombro: %d | Codo: %d | Garra: %d\n",
-                hombro.actual, codo.actual, garra.actual);
+  Serial.printf("Base: %d | Hombro: %d | Codo: %d | Garra: %d\n",
+                base.actual, hombro.actual, codo.actual, garra.actual);
 }
 
 void mostrarAyuda() {
   Serial.println("Brazo listo. Comandos:");
+  Serial.println("  b 90         -> base a 90 grados");
   Serial.println("  a / c        -> abrir / cerrar garra");
   Serial.println("  h 45         -> hombro a 45 grados");
   Serial.println("  c 33         -> codo a 33 grados");
@@ -197,6 +212,8 @@ void procesarComando(String comando) {
     abrirGarra();
   } else if (palabra == "c" && !hayNumero) {
     cerrarGarra();                          // "c" solo = cerrar garra
+  } else if ((palabra == "b" || palabra == "base") && hayNumero) {
+    moverArticulacion(base, valor1);        // "b 90"
   } else if ((palabra == "h" || palabra == "hombro") && hayNumero) {
     moverArticulacion(hombro, valor1);      // "h 45"
   } else if ((palabra == "c" || palabra == "codo") && hayNumero) {
@@ -206,6 +223,7 @@ void procesarComando(String comando) {
   } else if (palabra == "brazo" && espacio2 != -1) {
     moverBrazo(valor1, valor2);
   } else if (palabra == "x") {
+    soltarArticulacion(base);
     soltarArticulacion(hombro);
     soltarArticulacion(codo);
     soltarArticulacion(garra);
@@ -222,8 +240,13 @@ void procesarComando(String comando) {
 void setup() {
   Serial.begin(115200);
 
+  // Uno por uno, con una pausa, para no pedir mucha corriente de golpe
+  iniciarArticulacion(base);
+  delay(300);
   iniciarArticulacion(hombro);
+  delay(300);
   iniciarArticulacion(codo);
+  delay(300);
   iniciarArticulacion(garra);
 
   delay(1000);  // Da tiempo a que el Monitor Serie se conecte
