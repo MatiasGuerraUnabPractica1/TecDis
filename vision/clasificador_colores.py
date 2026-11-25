@@ -95,7 +95,8 @@ def detectar_color(zona):
 
 
 def abrir_brazo():
-    if PUERTO_BRAZO is None:
+    # Acepta None, "None" o "" como "sin brazo" (modo prueba)
+    if PUERTO_BRAZO is None or str(PUERTO_BRAZO).strip().lower() in ("", "none"):
         print("Modo prueba: no se conecta el brazo.")
         return None
     import serial
