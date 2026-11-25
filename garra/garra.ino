@@ -214,9 +214,11 @@ void posicionReposo() {
   baseCentro();
 }
 
-// Levanta el brazo (con o sin objeto): h 130
+// Levanta el brazo (con o sin objeto): h 80 -> c 120
 void levantar() {
-  moverArticulacion(hombro, HOMBRO_ARRIBA);
+  moverArticulacion(hombro, REPOSO_HOMBRO);
+  pausa();
+  moverArticulacion(codo, REPOSO_CODO);
   pausa();
 }
 
