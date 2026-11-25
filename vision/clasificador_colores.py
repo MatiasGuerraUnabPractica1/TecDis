@@ -26,7 +26,15 @@ import numpy as np
 # ===================== CONFIGURACIÓN =====================
 # Dirección de la cámara (la página que abriste en el navegador)
 CAMARA_IP = "10.227.104.225"
+
+# Cómo leer la imagen:
+#   "foto"   -> pide una foto a la vez a  http://IP/capture
+#   "stream" -> lee el video continuo de  http://IP:81/stream
+# Si una no funciona, prueba con la otra.
+MODO_CAMARA = "foto"
 URL_FOTO = f"http://{CAMARA_IP}/capture"
+URL_STREAM = f"http://{CAMARA_IP}:81/stream"
+TIMEOUT_CAMARA = 10   # segundos
 
 # Puerto del ESP32 del brazo (mira en Arduino IDE -> Herramientas -> Puerto).
 # Pon None para probar solo la cámara, sin mover el brazo.
@@ -62,9 +70,23 @@ TIMEOUT_RUTINA = 60
 # =========================================================
 
 
+_stream = None
+
+
 def leer_foto():
-    """Pide una foto a la ESP32-CAM y la devuelve como imagen de OpenCV."""
-    with urllib.request.urlopen(URL_FOTO, timeout=5) as respuesta:
+    """Obtiene una imagen de la ESP32-CAM como imagen de OpenCV."""
+    global _stream
+    if MODO_CAMARA == "stream":
+        if _stream is None or not _stream.isOpened():
+            _stream = cv2.VideoCapture(URL_STREAM)
+        ok, imagen = _stream.read()
+        if not ok:
+            _stream.release()
+            _stream = None
+            raise IOError(f"no llega video desde {URL_STREAM}")
+        return imagen
+
+    with urllib.request.urlopen(URL_FOTO, timeout=TIMEOUT_CAMARA) as respuesta:
         datos = np.frombuffer(respuesta.read(), dtype=np.uint8)
     return cv2.imdecode(datos, cv2.IMREAD_COLOR)
 
