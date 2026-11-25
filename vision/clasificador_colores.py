@@ -28,11 +28,11 @@ import numpy as np
 CAMARA_IP = "10.227.104.225"
 
 # Cómo leer la imagen:
-#   "foto"   -> pide una foto a la vez a  http://IP/capture
+#   "foto"   -> pide una foto a la vez a  http://IP/foto
 #   "stream" -> lee el video continuo de  http://IP:81/stream
 # Si una no funciona, prueba con la otra.
 MODO_CAMARA = "foto"
-URL_FOTO = f"http://{CAMARA_IP}/capture"
+URL_FOTO = f"http://{CAMARA_IP}/foto"       # enlace "Tomar una foto" de la página
 URL_STREAM = f"http://{CAMARA_IP}:81/stream"
 TIMEOUT_CAMARA = 10   # segundos
 
@@ -175,6 +175,8 @@ def main():
             time.sleep(1)
             continue
         if imagen is None:
+            print(f"La cámara respondió, pero no con una imagen. Revisa URL_FOTO ({URL_FOTO}).")
+            time.sleep(1)
             continue
 
         zona, rect = recortar_zona(imagen)
