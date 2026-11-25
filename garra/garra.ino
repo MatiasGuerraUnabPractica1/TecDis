@@ -246,34 +246,31 @@ void soltar() {
   delay(PAUSA_AGARRE_MS);
 }
 
-// Rutina completa: agarra el objeto al centro, lo lleva hacia
-// anguloBase (izquierda o derecha), lo suelta y vuelve a reposo.
+// Rutina completa: parte desde reposo con la garra abierta, agarra el
+// objeto al centro, lo lleva hacia anguloBase (izquierda o derecha) y lo suelta.
 void agarrarYLlevar(int anguloBase, const char* lado) {
   Serial.printf(">> Agarrar y llevar a la %s\n", lado);
 
-  Serial.println("1/7 Base al centro y garra abierta");
-  baseCentro();
-  abrirGarra();
+  Serial.println("1/6 Reposo y garra abierta");
+  posicionReposo();                 // h 80 -> c 120 -> b 95
+  abrirGarra();                     // a
   pausa();
 
-  Serial.println("2/7 Agarrando el objeto");
+  Serial.println("2/6 Agarrando el objeto");
   agarrar();
 
-  Serial.println("3/7 Levantando el objeto");
+  Serial.println("3/6 Levantando el objeto");
   levantar();
 
-  Serial.printf("4/7 Girando la base a la %s\n", lado);
+  Serial.printf("4/6 Girando la base a la %s\n", lado);
   moverArticulacion(base, anguloBase);
   pausa();
 
-  Serial.println("5/7 Bajando y soltando el objeto");
+  Serial.println("5/6 Bajando y soltando el objeto");
   soltar();
 
-  Serial.println("6/7 Levantando la garra");
+  Serial.println("6/6 Levantando la garra");
   levantar();
-
-  Serial.println("7/7 Volviendo a reposo");
-  posicionReposo();
 
   Serial.println(">> Rutina terminada");
 }
