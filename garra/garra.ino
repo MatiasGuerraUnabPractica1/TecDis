@@ -16,6 +16,13 @@
  *   Naranja -> pin de señal (ver PIN_... abajo)
  *
  * Comandos por Monitor Serie (115200 baudios, "Nueva línea"):
+ *   agarrar derecha   -> rutina completa: agarra, lleva el objeto a la derecha,
+ *                        lo suelta y vuelve a reposo
+ *   agarrar izquierda -> lo mismo, pero hacia la izquierda
+ *   agarrar / soltar  -> solo la secuencia de agarrar o de soltar
+ *   reposo            -> posición de reposo (centro)
+ *   izquierda / derecha / centro -> mover solo la base
+ *
  *   b 90           -> base a 90 grados     (también: base 90)
  *   a / c          -> abrir / cerrar garra
  *   h 45           -> hombro a 45 grados   (también: hombro 45)
@@ -53,7 +60,22 @@ const int CODO_INICIAL   = 180;  // posición base del codo
 // Límites de la base (giro de todo el brazo). AJUSTAR igual que el resto.
 const int BASE_MIN       = 0;
 const int BASE_MAX       = 180;
-const int BASE_INICIAL   = 90;   // posición base: centro
+const int BASE_INICIAL   = 95;   // posición base: centro (origen)
+
+// ---- Posiciones de las rutinas automáticas ----
+const int BASE_IZQUIERDA = 0;
+const int BASE_DERECHA   = 180;
+const int BASE_CENTRO    = 95;
+
+const int REPOSO_HOMBRO  = 80;   // posición de reposo del brazo
+const int REPOSO_CODO    = 120;
+
+const int HOMBRO_ARRIBA  = 130;  // brazo levantado (con o sin objeto)
+const int CODO_ALCANCE   = 160;  // codo estirado hacia el objeto
+const int HOMBRO_ABAJO   = 170;  // brazo bajado hasta el objeto
+
+const int PAUSA_PASO_MS  = 300;  // pausa entre cada paso de una rutina
+const int PAUSA_AGARRE_MS = 500; // pausa extra después de cerrar/abrir la garra
 
 // Velocidad: milisegundos de espera por cada grado (0 = movimiento inmediato)
 const int MS_POR_GRADO = 8;
@@ -174,6 +196,86 @@ void controlarGarra(bool abrir) {
   }
 }
 
+// ---------------- Rutinas automáticas ----------------
+void pausa() {
+  delay(PAUSA_PASO_MS);
+}
+
+void baseIzquierda() { moverArticulacion(base, BASE_IZQUIERDA); }
+void baseDerecha()   { moverArticulacion(base, BASE_DERECHA); }
+void baseCentro()    { moverArticulacion(base, BASE_CENTRO); }
+
+// Reposo: h 80 -> c 120 -> b 95
+void posicionReposo() {
+  moverArticulacion(hombro, REPOSO_HOMBRO);
+  pausa();
+  moverArticulacion(codo, REPOSO_CODO);
+  pausa();
+  baseCentro();
+}
+
+// Levanta el brazo (con o sin objeto): h 130
+void levantar() {
+  moverArticulacion(hombro, HOMBRO_ARRIBA);
+  pausa();
+}
+
+// Baja hasta el objeto: h 130 -> c 160 -> h 170
+void bajarAlObjeto() {
+  moverArticulacion(hombro, HOMBRO_ARRIBA);
+  pausa();
+  moverArticulacion(codo, CODO_ALCANCE);
+  pausa();
+  moverArticulacion(hombro, HOMBRO_ABAJO);
+  pausa();
+}
+
+// Agarrar: h 130 -> c 160 -> h 170 -> c (cerrar garra)
+void agarrar() {
+  bajarAlObjeto();
+  cerrarGarra();
+  delay(PAUSA_AGARRE_MS);
+}
+
+// Soltar: h 130 -> c 160 -> h 170 -> a (abrir garra)
+void soltar() {
+  bajarAlObjeto();
+  abrirGarra();
+  delay(PAUSA_AGARRE_MS);
+}
+
+// Rutina completa: agarra el objeto al centro, lo lleva hacia
+// anguloBase (izquierda o derecha), lo suelta y vuelve a reposo.
+void agarrarYLlevar(int anguloBase, const char* lado) {
+  Serial.printf(">> Agarrar y llevar a la %s\n", lado);
+
+  Serial.println("1/7 Base al centro y garra abierta");
+  baseCentro();
+  abrirGarra();
+  pausa();
+
+  Serial.println("2/7 Agarrando el objeto");
+  agarrar();
+
+  Serial.println("3/7 Levantando el objeto");
+  levantar();
+
+  Serial.printf("4/7 Girando la base a la %s\n", lado);
+  moverArticulacion(base, anguloBase);
+  pausa();
+
+  Serial.println("5/7 Bajando y soltando el objeto");
+  soltar();
+
+  Serial.println("6/7 Levantando la garra");
+  levantar();
+
+  Serial.println("7/7 Volviendo a reposo");
+  posicionReposo();
+
+  Serial.println(">> Rutina terminada");
+}
+
 // ---------------- Monitor Serie ----------------
 void mostrarPosicion() {
   Serial.printf("Base: %d | Hombro: %d | Codo: %d | Garra: %d\n",
@@ -182,6 +284,9 @@ void mostrarPosicion() {
 
 void mostrarAyuda() {
   Serial.println("Brazo listo. Comandos:");
+  Serial.println("  agarrar derecha / agarrar izquierda -> rutina completa");
+  Serial.println("  agarrar / soltar / reposo");
+  Serial.println("  izquierda / derecha / centro        -> mover la base");
   Serial.println("  b 90         -> base a 90 grados");
   Serial.println("  a / c        -> abrir / cerrar garra");
   Serial.println("  h 45         -> hombro a 45 grados");
@@ -208,7 +313,23 @@ void procesarComando(String comando) {
 
   bool hayNumero = resto.length() > 0;
 
-  if (palabra == "a") {
+  if (palabra == "agarrar" && resto == "derecha") {
+    agarrarYLlevar(BASE_DERECHA, "derecha");
+  } else if (palabra == "agarrar" && resto == "izquierda") {
+    agarrarYLlevar(BASE_IZQUIERDA, "izquierda");
+  } else if (palabra == "agarrar" && !hayNumero) {
+    agarrar();
+  } else if (palabra == "soltar" && !hayNumero) {
+    soltar();
+  } else if (palabra == "reposo") {
+    posicionReposo();
+  } else if (palabra == "izquierda") {
+    baseIzquierda();
+  } else if (palabra == "derecha") {
+    baseDerecha();
+  } else if (palabra == "centro") {
+    baseCentro();
+  } else if (palabra == "a") {
     abrirGarra();
   } else if (palabra == "c" && !hayNumero) {
     cerrarGarra();                          // "c" solo = cerrar garra
