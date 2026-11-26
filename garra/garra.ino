@@ -74,11 +74,12 @@ const int HOMBRO_ARRIBA  = 130;  // brazo levantado (con o sin objeto)
 const int CODO_ALCANCE   = 160;  // codo estirado hacia el objeto
 const int HOMBRO_ABAJO   = 170;  // brazo bajado hasta el objeto
 
-const int PAUSA_PASO_MS  = 300;  // pausa entre cada paso de una rutina
-const int PAUSA_AGARRE_MS = 500; // pausa extra después de cerrar/abrir la garra
+const int PAUSA_PASO_MS  = 80;   // pausa entre cada paso de una rutina
+const int PAUSA_AGARRE_MS = 250; // pausa extra después de cerrar/abrir la garra
 
-// Velocidad: milisegundos de espera por cada grado (0 = movimiento inmediato)
-const int MS_POR_GRADO = 8;
+// Velocidad: milisegundos por cada grado de recorrido (0 = movimiento inmediato).
+// Menos = más rápido. Por debajo de ~3 los HS-475HB no alcanzan a seguir el ritmo.
+const int MS_POR_GRADO = 3;
 
 // Rango de pulso de cada tipo de servo (en microsegundos).
 // Micro servo 9g: 500-2400 us.
@@ -135,20 +136,29 @@ void asegurarConectado(Articulacion &art) {
   }
 }
 
-// Mueve UNA articulación (base, garra, hombro o codo) a un ángulo, de forma gradual.
+// Curva de suavizado: arranca despacio, acelera al medio y frena al llegar.
+// Recibe t de 0 a 1 y devuelve la fracción del recorrido (0 a 1).
+float suavizar(float t) {
+  return t * t * (3.0f - 2.0f * t);
+}
+
+// Mueve UNA articulación (base, garra, hombro o codo) a un ángulo, de forma suave.
 // El ángulo se recorta a los límites de esa articulación.
 void moverArticulacion(Articulacion &art, int anguloDestino) {
   asegurarConectado(art);
   anguloDestino = constrain(anguloDestino, art.minimo, art.maximo);
 
-  if (MS_POR_GRADO == 0) {
+  int inicio = art.actual;
+  int pasos  = abs(anguloDestino - inicio);
+  if (MS_POR_GRADO == 0 || pasos == 0) {
     art.actual = anguloDestino;
     art.servo.write(art.actual);
     return;
   }
 
-  while (art.actual != anguloDestino) {
-    art.actual += (anguloDestino > art.actual) ? 1 : -1;
+  for (int i = 1; i <= pasos; i++) {
+    float avance = suavizar((float)i / pasos);
+    art.actual = inicio + (int)round((anguloDestino - inicio) * avance);
     art.servo.write(art.actual);
     delay(MS_POR_GRADO);
   }
@@ -171,8 +181,9 @@ void moverBrazo(int anguloHombro, int anguloCodo) {
   }
 
   for (int i = 1; i <= pasos; i++) {
-    hombro.actual = inicioHombro + (anguloHombro - inicioHombro) * i / pasos;
-    codo.actual   = inicioCodo   + (anguloCodo   - inicioCodo)   * i / pasos;
+    float avance = suavizar((float)i / pasos);
+    hombro.actual = inicioHombro + (int)round((anguloHombro - inicioHombro) * avance);
+    codo.actual   = inicioCodo   + (int)round((anguloCodo   - inicioCodo)   * avance);
     hombro.servo.write(hombro.actual);
     codo.servo.write(codo.actual);
     delay(MS_POR_GRADO);
